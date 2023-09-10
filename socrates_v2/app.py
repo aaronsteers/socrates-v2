@@ -15,23 +15,9 @@ st.warning(":construction_worker: Socrates 2.0 is a work in progress.")
 
 class SocratesChatbot:
 
-    def __init__(self):
-        chat_utils.configure_openai_api_key()
-
-    @chat_utils.enable_chat_history
     def main(self):
-        chain = chat_utils.create_chain()
-        chat_utils.show_debug()
-        user_query = st.chat_input(placeholder="")
-        if user_query:
-            chat_utils.display_msg(user_query, 'user')
-            with st.chat_message("assistant"):
-                st_cb = chat_utils.StreamHandler(st.empty())
-                response = chain.run(user_query, callbacks=[st_cb])
-                st.session_state.messages.append(
-                    {"role": "assistant", "content": response}
-                )
-
+        chat_utils.show_sidebar()
+        chat_utils.show_chat()
 
 if __name__ == "__main__":
     obj = SocratesChatbot()

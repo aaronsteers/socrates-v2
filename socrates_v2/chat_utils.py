@@ -1,112 +1,132 @@
+import json
 import os
-import random
+from typing import TYPE_CHECKING
 
 import streamlit as st
 
-from langchain.callbacks.base import BaseCallbackHandler
-from langchain.chains import ConversationChain
-from langchain.llms import OpenAI
-from langchain.memory import ConversationBufferMemory
+from socrates_v2.interop import LangChainStreamingCallbackToStreamlit
+from socrates_v2.ai import new_personality, PERSONALITIES
 
-from socrates_v2 import llm
+if TYPE_CHECKING:
+    from socrates_v2.ai import AIPersonality
 
-@st.cache_resource
-def get_personality() -> llm.SocratesAI:
-    """Get the LLM to use."""
-    return llm.YodaAI()
+def new_chat(personality_name="Socrates", history: list[dict] | None = None):
+    """Start a new chat with the given personality.
 
-@st.cache_resource
-def get_opening_prompt():
-    return random.choice(get_personality().PROMPTS)
-
-@st.cache_resource
-def create_chain() -> ConversationChain:
-    memory = ConversationBufferMemory()
-    openai_llm = OpenAI(
-        model_name=llm.OPENAI_MODEL,
-        temperature=llm.TEMPERATURE,
-        streaming=True,
-    )
-    chain = ConversationChain(
-        llm=openai_llm,
-        memory=memory,
-        verbose=True,
-        prompt=get_personality().prompt_template,
-    )
-    return chain
-
-def show_debug():
-    with st.sidebar:
-        debug_enabled = st.checkbox(
-            "Show debug info",
-            key="show_debug",
-            value=True,
-        )
-        if debug_enabled:
-            with st.container():
-                st.subheader("Session state:")
-                st.code(str(st.session_state.__dict__), language="json")
-                st.subheader("Cache:")
-                st.code(str(st.cache_resource.__dict__), language="json")
-                st.subheader("History:")
-                st.code(str(st.session_state.messages), language="json")
-
-class StreamHandler(BaseCallbackHandler):
-    """Callback handler to stream the response from the chatbot."""
-    
-    def __init__(self, container, initial_text=""):
-        self.container = container
-        self.text = initial_text
-
-    def on_llm_new_token(self, token: str, **kwargs):
-        self.text += token
-        self.container.markdown(self.text)
-
-# decorator
-def enable_chat_history(func):
-    opening_prompt = get_opening_prompt()
-
-    # to show chat history on ui
-    if "messages" not in st.session_state:
-        st.session_state["messages"] = [{"role": "assistant", "content": opening_prompt}]
-
-    for msg in st.session_state["messages"]:
-        st.chat_message(msg["role"]).write(msg["content"])
-
-    def execute(*args, **kwargs):
-        func(*args, **kwargs)
-
-    return execute
-
-def display_msg(msg, author):
-    """Method to display message on the UI.
-
-    Args:
-        msg (str): message to display
-        author (str): author of the message -user/assistant
+    This resets all prior messages and langchain artifacts.
     """
-    st.session_state.messages.append({"role": author, "content": msg})
-    st.chat_message(author).write(msg)
+    # Initialize the personality:
+    personality: AIPersonality = new_personality(personality_name)
+    st.session_state["personality"] = personality
+    st.session_state["chain"] = personality.create_langchain_chain(
+        openai_api_key=st.session_state.openai_api_key
+    )
+    st.session_state["messages"] = history or []
 
-def configure_openai_api_key():
-    """Method to configure OpenAI API key."""
-    openai_api_key = ""
-    if "OPENAI_API_KEY" in os.environ:
-        openai_api_key = os.environ['OPENAI_API_KEY']
 
+def show_sidebar():
     with st.sidebar:
-        openai_api_key = st.sidebar.text_input(
+        st.text_input(
             label="OpenAI API Key",
             type="password",
-            value=openai_api_key,
-            placeholder="sk-..."
-            )
-        st.info("Obtain your key from this link: https://platform.openai.com/account/api-keys")
+            value=os.environ.get("OPENAI_API_KEY", ""),
+            placeholder="sk-...",
+            key="openai_api_key",
+        )
+        st.text("Select your sage:")
+        st.button(
+            "New conversation with Socrates",
+            key="new_socrates",
+            on_click=new_chat,
+            args=("Socrates",),
+            kwargs={},
+        )
+        st.button(
+            "New conversation with Yoda",
+            key="new_yoda",
+            on_click=new_chat,
+            args=("Yoda",),
+            kwargs={},
+        )
+        if st.checkbox("Enable debug mode"):
+            show_debug_info()
 
-    if openai_api_key:
-        st.session_state['OPENAI_API_KEY'] = openai_api_key
-        os.environ['OPENAI_API_KEY'] = openai_api_key
-    else:
-        st.error("Please add your OpenAI API key in the sidebar to continue.")
-        st.stop()
-    return openai_api_key
+
+def show_debug_info():
+    # format dict as json with indentation of 2 spaces
+    with st.sidebar:
+        st.subheader("History:")
+        with st.container():
+            if "messages" in st.session_state:
+                json_msg_hist = json.dumps(st.session_state.messages, indent=2)
+                st.code(json_msg_hist, language="json")
+            else:
+                st.warning("No chat history yet.")
+
+
+def show_chat_history():
+    if "messages" not in st.session_state or not st.session_state["messages"]:
+        st.session_state["messages"] = [
+            {
+                "role": st.session_state.personality.name,
+                "content": st.session_state.personality.get_greeting()
+            }
+        ]
+
+    for msg in st.session_state["messages"]:
+        avatar = None  # default to a generic user avatar
+        if msg["role"] in PERSONALITIES:
+            avatar = PERSONALITIES[msg["role"]].avatar
+
+        with st.chat_message(msg["role"], avatar=avatar):
+            st.write(msg["content"])
+
+
+def show_chat():
+    if "openai_api_key" not in st.session_state or not st.session_state.openai_api_key:
+        st.error(
+            "Please add your OpenAI API key in the sidebar to continue.\n\n" +
+            "You can use the following link to generate a new key: " +
+            "https://platform.openai.com/account/api-keys"
+        )
+        return
+
+    if "personality" not in st.session_state:
+        # We don't know who we are speaking with yet.
+        return
+
+    show_chat_history()
+
+    user_query = st.chat_input(placeholder="")
+    if user_query:
+        # Immediately echo the input into chat and append to history:
+        st.chat_message("user").write(user_query)
+        st.session_state.messages.append(
+            {"role": "user", "content": user_query}
+        )
+
+        # Then append (stream) the response from the chatbot:
+        append_ineractive_chat(user_query)
+
+
+def append_ineractive_chat(user_query: str):
+    personality = st.session_state.personality
+    chain = st.session_state.chain
+
+    with st.chat_message(
+        st.session_state.personality.name,
+        avatar=personality.avatar,
+    ):
+        st_typing_region = st.empty()  # New empty container for the typing effect.
+        response = chain.run(
+            user_query,
+            callbacks=[
+                LangChainStreamingCallbackToStreamlit(st_typing_region)
+            ]
+        )
+
+        # The response is streamed in realtime, above. Once we reach here, we
+        # can add the full response to the chat history:
+        st.session_state.messages.append(
+            {"role": st.session_state.personality.name, "content": response}
+        )
