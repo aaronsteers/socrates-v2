@@ -8,22 +8,44 @@ from langchain.chains import ConversationChain
 from langchain.llms import OpenAI
 from langchain.memory import ConversationBufferMemory
 
-OPENAI_MODEL = "gpt-3.5-turbo"
-PROMPTS = [
-    "What truth do you seek today?",
-    "With which thought shall we engage this day?"
-]
+from socrates_v2 import llm
+
+@st.cache_resource
+def get_personality() -> llm.SocratesAI:
+    """Get the LLM to use."""
+    return llm.YodaAI()
 
 @st.cache_resource
 def get_opening_prompt():
-    return random.choice(PROMPTS)
+    return random.choice(get_personality().PROMPTS)
 
 @st.cache_resource
 def create_chain() -> ConversationChain:
     memory = ConversationBufferMemory()
-    llm = OpenAI(model_name=OPENAI_MODEL, temperature=0, streaming=True)
-    chain = ConversationChain(llm=llm, memory=memory, verbose=True)
+    openai_llm = OpenAI(model_name=llm.OPENAI_MODEL, temperature=0, streaming=True)
+    chain = ConversationChain(
+        llm=openai_llm,
+        memory=memory,
+        verbose=True,
+        prompt=get_personality().prompt_template,
+    )
     return chain
+
+def show_debug():
+    with st.sidebar:
+        debug_enabled = st.checkbox(
+            "Show debug info",
+            key="show_debug",
+            value=True,
+        )
+        if debug_enabled:
+            with st.container():
+                st.subheader("Session state:")
+                st.code(str(st.session_state.__dict__), language="json")
+                st.subheader("Cache:")
+                st.code(str(st.cache_resource.__dict__), language="json")
+                st.subheader("History:")
+                st.code(str(st.session_state.messages), language="json")
 
 class StreamHandler(BaseCallbackHandler):
     """Callback handler to stream the response from the chatbot."""
@@ -38,27 +60,14 @@ class StreamHandler(BaseCallbackHandler):
 
 # decorator
 def enable_chat_history(func):
-    if os.environ.get("OPENAI_API_KEY"):
-        # to clear chat history after switching chat threads
-        thread_id = func.__qualname__
-        if "thread_id" not in st.session_state:
-            st.session_state["thread_id"] = thread_id
+    opening_prompt = get_opening_prompt()
 
-        if st.session_state["thread_id"] != thread_id:
-            st.cache_resource.clear()
-            if "thread_id" in st.session_state:
-                del st.session_state["thread_id"]
-            if "messages" in st.session_state:
-                del st.session_state["messages"]
-        
-        opening_prompt = get_opening_prompt()
+    # to show chat history on ui
+    if "messages" not in st.session_state:
+        st.session_state["messages"] = [{"role": "assistant", "content": opening_prompt}]
 
-        # to show chat history on ui
-        if "messages" not in st.session_state:
-            st.session_state["messages"] = [{"role": "assistant", "content": opening_prompt}]
-
-        for msg in st.session_state["messages"]:
-            st.chat_message(msg["role"]).write(msg["content"])
+    for msg in st.session_state["messages"]:
+        st.chat_message(msg["role"]).write(msg["content"])
 
     def execute(*args, **kwargs):
         func(*args, **kwargs)
@@ -76,17 +85,19 @@ def display_msg(msg, author):
     st.chat_message(author).write(msg)
 
 def configure_openai_api_key():
-    if "OPENAI_API_KEY" not in os.environ:
-        with st.sidebar:
-            openai_api_key = st.sidebar.text_input(
-                label="OpenAI API Key",
-                type="password",
-                value=st.session_state['OPENAI_API_KEY'] if 'OPENAI_API_KEY' in st.session_state else '',
-                placeholder="sk-..."
-                )
-            st.info("Obtain your key from this link: https://platform.openai.com/account/api-keys")
-    else:
-        openai_api_key = os.environ["OPENAI_API_KEY"]
+    """Method to configure OpenAI API key."""
+    openai_api_key = ""
+    if "OPENAI_API_KEY" in os.environ:
+        openai_api_key = os.environ['OPENAI_API_KEY']
+
+    with st.sidebar:
+        openai_api_key = st.sidebar.text_input(
+            label="OpenAI API Key",
+            type="password",
+            value=openai_api_key,
+            placeholder="sk-..."
+            )
+        st.info("Obtain your key from this link: https://platform.openai.com/account/api-keys")
 
     if openai_api_key:
         st.session_state['OPENAI_API_KEY'] = openai_api_key

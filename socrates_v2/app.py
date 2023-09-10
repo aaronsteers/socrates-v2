@@ -21,6 +21,7 @@ class SocratesChatbot:
     @chat_utils.enable_chat_history
     def main(self):
         chain = chat_utils.create_chain()
+        chat_utils.show_debug()
         user_query = st.chat_input(placeholder="")
         if user_query:
             chat_utils.display_msg(user_query, 'user')
