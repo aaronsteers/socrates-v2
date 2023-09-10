@@ -1,0 +1,18 @@
+{
+    "[python]": {
+        "editor.defaultFormatter": "charliermarsh.ruff",
+        "editor.formatOnSave": true,
+    },
+    "suggestedExtensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "redhat.vscode-yaml",
+        "ms-python.black",
+        "charliermarsh.ruff",
+        "GitHub.copilot",
+        "ms-vsliveshare.vsliveshare",
+        "ms-vscode-remote.vscode-remote-extensionpack",
+        "GitHub.vscode-pull-request-github",
+        "ms-vscode.makefile-tools"
+    ],
+}
