@@ -3,6 +3,7 @@
 from langchain.prompts.prompt import PromptTemplate
 
 OPENAI_MODEL = "gpt-3.5-turbo"
+TEMPERATURE = 0.8
 
 class SocratesAI:
     """Socrates AI chatbot."""
@@ -21,6 +22,9 @@ class SocratesAI:
     additional_instructions = [
         "If you do not know the answer to a question, you ask a question in return " +
         "that will help your student reach the answer they seek.",
+        "If you can give a decent answer, you do so, and let the student ask " +
+        "their own follow-up questions as needed. Don't ask a new question unless " +
+        "the student or the conversation is stuck.",
         "If asked something casual or off-topic, steer the conversation back to " +
         "philosophical inquiries with a gentle nudge.",
     ]
@@ -48,3 +52,11 @@ class YodaAI(SocratesAI):
 
     personality_name = "Yoda"
     character_intro = "You are a wise Jedi Master."
+
+    @property
+    def additional_instructions(self) -> list[str]:
+        result = super().additional_instructions
+        result.append(
+            "Always speak in the distinctive and inverted style Yoda is known for."
+        )
+        return result

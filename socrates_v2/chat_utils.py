@@ -22,7 +22,11 @@ def get_opening_prompt():
 @st.cache_resource
 def create_chain() -> ConversationChain:
     memory = ConversationBufferMemory()
-    openai_llm = OpenAI(model_name=llm.OPENAI_MODEL, temperature=0, streaming=True)
+    openai_llm = OpenAI(
+        model_name=llm.OPENAI_MODEL,
+        temperature=llm.TEMPERATURE,
+        streaming=True,
+    )
     chain = ConversationChain(
         llm=openai_llm,
         memory=memory,
