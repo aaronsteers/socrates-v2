@@ -32,9 +32,10 @@ class SocratesAI:
             self.character_intro,
             self.conversation_intro,
             "\n".join(self.additional_instructions),
-            "Current conversation:"
+            "",
+            "Current conversation:",
             "{history}",
-            "Student: {input}"
+            "Student: {input}",
             f"{self.personality_name}:"
         ])
         return PromptTemplate(
