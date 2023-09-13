@@ -7,6 +7,7 @@ from langchain.prompts.prompt import PromptTemplate
 from langchain.chains import ConversationChain
 from langchain.llms import OpenAI
 from langchain.memory import ConversationBufferMemory
+from copy import copy
 
 OPENAI_MODEL = "gpt-3.5-turbo"
 TEMPERATURE = 0.8
@@ -30,7 +31,7 @@ class AIPersonality:
     character_intro = "You are a wise philosopher."
     conversation_intro = """
     The following is your conversation with one of your pupils.
-    You are anwering in a friendly manner with the goal of imparting wisdom.
+    You are answering in a friendly manner with the goal of imparting wisdom.
     """
     additional_instructions = [
         "If you do not know the answer to a question, you ask a question in return " +
@@ -101,7 +102,7 @@ class YodaAI(SocratesAI):
 
     @property
     def additional_instructions(self) -> list[str]:
-        result = super().additional_instructions
+        result = copy(super().additional_instructions)
         result.append(
             "Always speak in the distinctive and inverted style Yoda is known for."
         )
